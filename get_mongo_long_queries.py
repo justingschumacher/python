@@ -17,7 +17,7 @@ The script is self contained and does not take any parameters.
 AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY')
 AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
 now = datetime.datetime.now()
-filename = str(now.strftime("%Y%m%d_%H.%M.%S")) + "_PT" + ".json"
+filename = "mongodb" + str(now.strftime("%Y%m%d_%H.%M.%S")) + "_PT" + ".json"
 MONGO_SSM_PASSWORD = '/prod/us-west-2/SRE/mongodb/admin_pass'
 SLACK_SSM_PASSWORD = '/prod/us-west-2/SRE/slack/pass'
 session = boto3.Session(region_name='us-west-2')
@@ -42,57 +42,19 @@ def lambda_handler(event, context):
 
 
 def getfromshard(usersname, passw, serversname):
-    databases = ("impressions",
-                 "push",
-                 "app_launches",
-                 "app_metrics",
-                 "appuser_auth",
-                 "appuser_content",
-                 "appuser_logins",
-                 "file_downloads",
-                 "notes",
-                 "push",
-                 "usercontent"
-                 )
+
     client = MongoClient("mongodb://%s:%s@%s:27000/?authsource=admin" % (usersname, passw, serversname))
-    for database in databases:
-        database = client[database]
-        collection = database["system.profile"]
-        cursor = collection.find({})
-        #  Mapping example below
-    #     # cursor = collection.find({},
-    #     #                          {"allUsers": {"$slice": 2},
-    #     #                           "appName": 1,
-    #     #                           "client": 1,
-    #     #                           "command": {"$slice": 2},
-    #     #                           "locks": {"$slice": 3},
-    #     #                           "millis": 1,
-    #     #                           "ns": 1,
-    #     #                           "numYield": 1,
-    #     #                           "nreturned": 1,
-    #     #                           "planSummary": 1,
-    #     #                           "op": 1,
-    #     #                           "protocol": 1,
-    #     #                           "responseLength": 1,
-    #     #                           "user": 1,
-    #     #                           "query": 7,
-    #     #                           "keysExamined": 1,
-    #     #                           "docsExamined": 1,
-    #     #                           "hasSortStage": 1,
-    #     #                           "cursorExhausted": 1,
-    #     #                           "ts": 1,
-    #     #                           "execStats": 12
-    #     #                           }).limit(20)
 
     try:
-        with open(filename, 'w') as outfile:
-            for document in cursor:
-                print(json.dumps(document, default=dateconv, indent=4))  # debugging
-                outfile.write(json.dumps(document, default=dateconv, indent=4))
-        # outfile.close()  # potentially unneeded.
+        with open(filename, 'a') as outfile:
+            for database in client.list_database_names():
+                for collection in client[database].list_collection_names():
+                    if collection == "system.profile":
+                        for document in client[database][collection].find({}).sort([{'millis', -1}]).limit(5):
+                            # print(json.dumps(document, default=dateconv, indent=4))
+                            outfile.write(json.dumps(document, default=dateconv, indent=4))
 
     finally:
-        cursor.close()
         client.close()
 
 
@@ -104,14 +66,14 @@ def dateconv(datetoconv):
 def sendtos3():
     data = open(filename, 'rb')
     s3 = boto3.resource('s3')
-    object = s3.Object('01-logs', 'mongolongqueries/%s' % filename)
+    object = s3.Object('01-logs', 'slow_queries/%s' % filename)
     object.put(Body=data, ACL='bucket-owner-full-control')
 
 
 def sendtoslack():
     slack = Slacker('{}'.format(slack_password['Parameter']['Value']))
     slack.chat.post_message(channel='sys-monitor-logs',
-                            text='Mongo slow query file posted to %s%s' % ('s3://01-logs/mongolongqueries/', filename),
+                            text='Mongo slow query file posted to %s%s. You should see it there in a couple of minutes' % ('https://slowreports.docs.subsplash.net/', filename),
                             username='MongoBot'
                             )
 
