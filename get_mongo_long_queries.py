@@ -25,12 +25,12 @@ ssm = session.client('ssm')
 mongo_password = ssm.get_parameter(Name=MONGO_SSM_PASSWORD, WithDecryption=True)
 slack_password = ssm.get_parameter(Name=SLACK_SSM_PASSWORD, WithDecryption=True)
 
-servers = ("mongodb-analytics-00.awsusw2.subsplash.net",
-           "mongodb-analytics-01.awsusw2.subsplash.net",
-           "mongodb-analytics-02.awsusw2.subsplash.net",
-           "mongodb-analytics-03.awsusw2.subsplash.net",
-           "mongodb-analytics-04.awsusw2.subsplash.net",
-           "mongodb-analytics-05.awsusw2.subsplash.net")
+servers = ("mongodb-analytics-00.awsusw2.domain.net",
+           "mongodb-analytics-01.awsusw2.domain.net",
+           "mongodb-analytics-02.awsusw2.domain.net",
+           "mongodb-analytics-03.awsusw2.domain.net",
+           "mongodb-analytics-04.awsusw2.domain.net",
+           "mongodb-analytics-05.awsusw2.domain.net")
 
 
 def lambda_handler(event, context):
@@ -73,7 +73,7 @@ def sendtos3():
 def sendtoslack():
     slack = Slacker('{}'.format(slack_password['Parameter']['Value']))
     slack.chat.post_message(channel='sys-monitor-logs',
-                            text='Mongo slow query file posted to %s%s. You should see it there in a couple of minutes' % ('https://slowreports.docs.subsplash.net/', filename),
+                            text='Mongo slow query file posted to %s%s. You should see it there in a couple of minutes' % ('https://slowreports.docs.domain.net/', filename),
                             username='MongoBot'
                             )
 
